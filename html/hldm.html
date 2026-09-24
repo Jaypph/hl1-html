@@ -100,7 +100,9 @@
                 result.set(chunk, position);
                 position += chunk.byteLength;
             }
-            progress(offset + weight, label + " loaded");
+            if (label === "Game data") downloadProgress.game = 1;
+            else downloadProgress.extras = 1;
+            updateDownloads();
             return result.buffer;
         }
 
