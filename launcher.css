@@ -1,19 +1,75 @@
+:root {
+    color-scheme: dark;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+}
+
 body {
-    background-color: black;
+    margin: 0;
+    min-height: 100vh;
+    background: #090909;
+    color: #eee;
+}
+
+.launcher {
+    width: min(900px, calc(100% - 32px));
+    margin: 0 auto;
+    padding: 64px 0;
 }
 
 h1 {
-    color: orange;
+    margin-bottom: 12px;
+    color: #f39c12;
+    font-size: clamp(32px, 6vw, 56px);
 }
 
 p {
-    color: orange;
+    color: #ccc;
+    line-height: 1.6;
 }
 
-a:link {
-    color: orange;
+.games {
+    display: grid;
+    gap: 16px;
+    margin: 36px 0;
 }
 
-a:hover {
-    color: yellow;
+.game {
+    display: block;
+    padding: 22px;
+    border: 1px solid #333;
+    border-radius: 8px;
+    background: #151515;
+    color: #f39c12;
+    text-decoration: none;
+    transition: transform .15s ease, border-color .15s ease, background .15s ease;
+}
+
+.game:hover,
+.game:focus-visible {
+    transform: translateY(-2px);
+    border-color: #f39c12;
+    background: #1d1d1d;
+}
+
+.game strong,
+.game span {
+    display: block;
+}
+
+.game strong {
+    margin-bottom: 6px;
+    font-size: 20px;
+}
+
+.game span {
+    color: #aaa;
+}
+
+.note {
+    font-size: 14px;
+    color: #888;
 }
