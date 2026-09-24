@@ -1,87 +1,159 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Loading</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Half-Life: Deathmatch</title>
     <style>
-        canvas {
-            width: 100vw;
-            height: 100vh;
-            top: 0;
-            left: 0;
-            position: fixed;
-        }
-
-        body {
+        html, body, canvas {
+            width: 100%;
+            height: 100%;
             margin: 0;
+        }
+        body {
+            overflow: hidden;
+            background: #000;
+            color: #fff;
+            font-family: Arial, sans-serif;
+        }
+        #status {
+            position: fixed;
+            z-index: 10;
+            inset: 0;
+            display: grid;
+            place-items: center;
+            background: #000;
+            font-size: 16px;
+            padding: 24px;
+            text-align: center;
+            pointer-events: none;
+        }
+        #status.error {
+            color: #ff8a8a;
+            pointer-events: auto;
+            white-space: pre-wrap;
+        }
+        canvas {
+            display: block;
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/xash3d-fwgs@latest/dist/raw.js"></script>
 </head>
 <body>
-<canvas id="canvas"></canvas>
-<script type="module">
-    import JSZip from 'https://cdn.skypack.dev/jszip@3.10.1';
+    <div id="status">Loading Half-Life: Deathmatch…</div>
+    <canvas id="canvas"></canvas>
 
-    async function main() {
-        const files = {}
-        const res = await fetch('https://files.catbox.moe/bz3nm6.zip')
-        const zip = await JSZip.loadAsync(await res.arrayBuffer());
-        const extras = await (await fetch('https://cdn.jsdelivr.net/npm/xash3d-fwgs@latest/dist/valve/extras.pk3')).arrayBuffer()
+    <script type="module">
+        import JSZip from "https://esm.sh/jszip@3.10.1";
 
-        await Promise.all(Object.keys(zip.files).map(async p => {
-            const file = zip.files[p]
-            if (file.dir) return;
+        const status = document.getElementById("status");
+        const canvas = document.getElementById("canvas");
 
-            const path = `/rodir/${p}`;
+        function setStatus(message, error = false) {
+            status.textContent = message;
+            status.classList.toggle("error", error);
+            if (!error) {
+                setTimeout(() => {
+                    status.style.display = "none";
+                }, 1000);
+            }
+        }
 
-            files[path] = await file.async("uint8array")
-        }))
+        async function fetchArrayBuffer(url, label) {
+            const response = await fetch(url, { mode: "cors", cache: "no-store" });
+            if (!response.ok) {
+                throw new Error(label + " failed to load (HTTP " + response.status + ").");
+            }
+            return response.arrayBuffer();
+        }
 
-        Xash3D({
-            arguments: ['-developer 1', '-console', '-windowed', '-ref', 'webgl2'],
-            canvas: document.getElementById('canvas'),
-            dynamicLibraries: [
-                "filesystem_stdio.wasm",
-                "libref_webgl2.wasm",
-                "cl_dlls/menu_emscripten_wasm32.wasm",
-                "dlls/hl_emscripten_wasm32.so",
-                "cl_dlls/client_emscripten_wasm32.wasm",
-            ],
-            onRuntimeInitialized: function () {
-                Object.keys(files)
-                    .forEach(k => {
-                        const dir = k.split('/')
-                            .slice(0, -1)
-                            .join('/');
-                        this.FS.mkdirTree(dir);
-                        this.FS.writeFile(k, files[k]);
+        async function main() {
+            try {
+                setStatus("Downloading Deathmatch…");
+
+                const [zipBuffer, extrasBuffer] = await Promise.all([
+                    fetchArrayBuffer("https://files.catbox.moe/bz3nm6.zip", "Game data"),
+                    fetchArrayBuffer(
+                        "https://cdn.jsdelivr.net/npm/xash3d-fwgs@latest/dist/valve/extras.pk3",
+                        "Xash3D extras"
+                    )
+                ]);
+
+                setStatus("Preparing game files…");
+
+                const zip = await JSZip.loadAsync(zipBuffer);
+                const files = {};
+
+                await Promise.all(
+                    Object.keys(zip.files).map(async (path) => {
+                        const entry = zip.files[path];
+                        if (!entry.dir) {
+                            files["/rodir/" + path] = await entry.async("uint8array");
+                        }
                     })
-                this.FS.writeFile('/rodir/valve/extras.pk3', new Uint8Array(extras));
-                this.FS.chdir('/rodir')
-                this.FS.mkdir('/rwdir')
-            },
-            locateFile: (p) => {
-                switch (p) {
-                    case 'xash.wasm':
-                        return 'https://cdn.jsdelivr.net/npm/xash3d-fwgs@latest/dist/xash.wasm'
-                    case 'filesystem_stdio.wasm':
-                        return 'https://cdn.jsdelivr.net/npm/xash3d-fwgs@latest/dist/filesystem_stdio.wasm'
-                    case 'libref_webgl2.wasm':
-                        return 'https://cdn.jsdelivr.net/npm/xash3d-fwgs@latest/dist/libref_webgl2.wasm'
-                    case 'cl_dlls/menu_emscripten_wasm32.wasm':
-                        return 'https://cdn.jsdelivr.net/npm/xash3d-fwgs@latest/dist/cl_dll/menu_emscripten_wasm32.wasm'
-                    case 'dlls/hl_emscripten_wasm32.so':
-                        return 'https://cdn.jsdelivr.net/npm/hlsdk-portable@latest/dist/dlls/hl_emscripten_wasm32.so'
-                    case 'cl_dlls/client_emscripten_wasm32.wasm':
-                        return 'https://cdn.jsdelivr.net/npm/hlsdk-portable@latest/dist/cl_dll/client_emscripten_wasm32.wasm'
-                    default:
-                        return p
-                }
-            },
-        })
-    }
+                );
 
-    main()
-</script>
+                setStatus("Starting Xash3D…");
+
+                Xash3D({
+                    arguments: ["-developer", "1", "-console", "-windowed", "-ref", "webgl2"],
+                    canvas,
+                    dynamicLibraries: [
+                        "filesystem_stdio.wasm",
+                        "libref_webgl2.wasm",
+                        "cl_dlls/menu_emscripten_wasm32.wasm",
+                        "dlls/hl_emscripten_wasm32.so",
+                        "cl_dlls/client_emscripten_wasm32.wasm"
+                    ],
+                    onRuntimeInitialized: function () {
+                        try {
+                            Object.entries(files).forEach(([path, data]) => {
+                                const directory = path.split("/").slice(0, -1).join("/");
+                                if (directory) this.FS.mkdirTree(directory);
+                                this.FS.writeFile(path, data);
+                            });
+
+                            this.FS.mkdirTree("/rodir/valve");
+                            this.FS.writeFile("/rodir/valve/extras.pk3", new Uint8Array(extrasBuffer));
+                            this.FS.mkdirTree("/rwdir");
+                            this.FS.chdir("/rodir");
+
+                            setStatus("Game started.");
+                        } catch (error) {
+                            console.error(error);
+                            setStatus("Could not prepare the game files.\n\n" + error.message, true);
+                        }
+                    },
+                    locateFile: (path) => {
+                        const base = "https://cdn.jsdelivr.net/npm/xash3d-fwgs@latest/dist/";
+                        switch (path) {
+                            case "xash.wasm":
+                            case "filesystem_stdio.wasm":
+                            case "libref_webgl2.wasm":
+                                return base + path;
+                            case "cl_dlls/menu_emscripten_wasm32.wasm":
+                                return base + "cl_dll/menu_emscripten_wasm32.wasm";
+                            case "dlls/hl_emscripten_wasm32.so":
+                                return "https://cdn.jsdelivr.net/npm/hlsdk-portable@latest/dist/dlls/hl_emscripten_wasm32.so";
+                            case "cl_dlls/client_emscripten_wasm32.wasm":
+                                return "https://cdn.jsdelivr.net/npm/hlsdk-portable@latest/dist/cl_dll/client_emscripten_wasm32.wasm";
+                            default:
+                                return path;
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error(error);
+                setStatus(
+                    "Unable to start Half-Life.\n\n" +
+                    error.message +
+                    "\n\nCheck your internet connection and try reloading the page.",
+                    true
+                );
+            }
+        }
+
+        main();
+    </script>
 </body>
 </html>
