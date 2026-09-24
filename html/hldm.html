@@ -176,13 +176,32 @@
                 fs.writeFile("/rodir/valve/extras.pk3", new Uint8Array(extrasBuffer));
                 fs.chdir("/rodir");
 
-                progress(100, "Starting Half-Life: Deathmatch…");
+                progress(99, "Starting Half-Life…");
+                await new Promise(requestAnimationFrame);
                 xash.main();
 
+                progress(99, "Starting engine…");
+                const startupStart = performance.now();
+                let startupFrames = 0;
+                await new Promise(resolve => {
+                    const check = () => {
+                        startupFrames++;
+                        const elapsed = performance.now() - startupStart;
+                        progress(99, "Starting Half-Life… " + Math.min(99, 90 + startupFrames) + "%");
+                        if (startupFrames >= 10 || elapsed >= 3000) {
+                            resolve();
+                            return;
+                        }
+                        requestAnimationFrame(check);
+                    };
+                    requestAnimationFrame(check);
+                });
+
                 const elapsed = ((performance.now() - startedAt) / 1000).toFixed(1);
+                progress(100, "Half-Life is ready!");
                 console.log("Xash3D started with " + fileCount + " game files in " + elapsed + "s.");
                 clearTimeout(timeout);
-                setTimeout(() => { status.style.display = "none"; }, 800);
+                setTimeout(() => { status.style.display = "none"; }, 250);
             } catch (error) {
                 clearTimeout(timeout);
                 console.error(error);
