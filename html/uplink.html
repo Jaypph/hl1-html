@@ -45,11 +45,19 @@
         const GAME_URL = "https://files.catbox.moe/xvzvx8.zip";
         const EXTRAS_URL = ENGINE_BASE + "valve/extras.pk3";
 
+        const downloadProgress = { game: 0, extras: 0 };
+        let engineReady = false;
+
         function progress(value, text) {
             const p = Math.max(0, Math.min(100, value));
             bar.style.width = p.toFixed(1) + "%";
             percent.textContent = Math.round(p) + "%";
             message.textContent = text;
+        }
+
+        function updateDownloads() {
+            const value = 55 * downloadProgress.game + 5 * downloadProgress.extras;
+            progress(value, "Downloading game data…");
         }
 
         function errorStatus(error) {
@@ -66,7 +74,9 @@
             const total = Number(response.headers.get("content-length")) || 0;
             if (!response.body || !total) {
                 const data = new Uint8Array(await response.arrayBuffer());
-                progress(offset + weight, label + " loaded");
+                if (label === "Game data") downloadProgress.game = 1;
+                else downloadProgress.extras = 1;
+                updateDownloads();
                 return data.buffer;
             }
 
@@ -78,7 +88,10 @@
                 if (done) break;
                 chunks.push(value);
                 loaded += value.byteLength;
-                progress(offset + weight * (loaded / total), "Downloading " + label + "…");
+                const fraction = loaded / total;
+                if (label === "Game data") downloadProgress.game = fraction;
+                else downloadProgress.extras = fraction;
+                updateDownloads();
             }
 
             const result = new Uint8Array(loaded);
@@ -111,6 +124,12 @@
         }
 
         async function main() {
+            const timeout = setTimeout(() => {
+                if (status.style.display !== "none") {
+                    message.textContent += "\n\nStill loading after 20 seconds. The connection or device may be too slow for the 20s target.";
+                }
+            }, 20000);
+
             try {
                 progress(0, "Downloading game data and starting engine…");
 
@@ -134,14 +153,17 @@
                 const extrasPromise = fetchWithProgress(EXTRAS_URL, "Xash3D extras", 5, 55);
 
                 progress(60, "Loading Xash3D engine…");
-                const enginePromise = xash.init();
+                const enginePromise = xash.init().then(() => {
+                    engineReady = true;
+                });
 
                 const [zipBuffer, extrasBuffer] = await Promise.all([
                     gamePromise,
                     extrasPromise
                 ]);
-                progress(60, "Game data ready — waiting for Xash3D…");
+                progress(60, engineReady ? "Preparing game files…" : "Game data ready — waiting for Xash3D…");
                 await enginePromise;
+                progress(90, "Xash3D ready — extracting game files…");
 
                 const fs = xash.em.FS;
                 fs.mkdirTree("/rodir");
@@ -157,8 +179,10 @@
 
                 const elapsed = ((performance.now() - startedAt) / 1000).toFixed(1);
                 console.log("Xash3D started with " + fileCount + " game files in " + elapsed + "s.");
+                clearTimeout(timeout);
                 setTimeout(() => { status.style.display = "none"; }, 800);
             } catch (error) {
+                clearTimeout(timeout);
                 console.error(error);
                 errorStatus(error);
             }
