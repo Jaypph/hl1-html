@@ -53,9 +53,7 @@
             status.textContent = message;
             status.classList.toggle("error", error);
             if (!error) {
-                setTimeout(() => {
-                    status.style.display = "none";
-                }, 1000);
+                status.style.display = "grid";
             }
         }
 
@@ -111,13 +109,10 @@
                 Xash3D({
                     arguments: ["-developer", "1", "-console", "-windowed", "-ref", "webgl2"],
                     canvas,
-                    dynamicLibraries: [
-                        "filesystem_stdio.wasm",
-                        "libref_webgl2.wasm",
-                        "cl_dlls/menu_emscripten_wasm32.wasm",
-                        "dlls/hl_emscripten_wasm32.so",
-                        "cl_dlls/client_emscripten_wasm32.wasm"
-                    ],
+                    libraries: {
+                        client: "https://cdn.jsdelivr.net/npm/hlsdk-portable@0.1.3/dist/cl_dll/client_emscripten_wasm32.wasm",
+                        server: "https://cdn.jsdelivr.net/npm/hlsdk-portable@0.1.3/dist/dlls/hl_emscripten_wasm32.so"
+                    },
                     onRuntimeInitialized: function () {
                         try {
                             Object.entries(files).forEach(([path, data]) => {
@@ -127,26 +122,11 @@
                             });
 
                             this.FS.mkdirTree("/rodir/valve");
-                            this.FS.mkdirTree("/rodir/dlls");
-                            this.FS.mkdirTree("/rodir/cl_dll");
-                            this.FS.writeFile("/rodir/valve/extras.pk3", new Uint8Array(extrasBuffer));
-
-                            // Xash3D resolves the Half-Life game DLL from its virtual
-                            // filesystem and expects the Emscripten module as .wasm.
-                            // The npm package exposes the server binary with a .so
-                            // filename, so install it under the name Xash3D requests.
-                            this.FS.writeFile(
-                                "/rodir/dlls/hl_emscripten_wasm32.wasm",
-                                new Uint8Array(serverLibrary)
-                            );
-                            this.FS.writeFile(
-                                "/rodir/cl_dll/client_emscripten_wasm32.wasm",
-                                new Uint8Array(clientLibrary)
-                            );
                             this.FS.mkdirTree("/rwdir");
                             this.FS.chdir("/rodir");
 
-                            setStatus("Game started.");
+                            setStatus("Xash3D initialized. Loading game…");
+                            setTimeout(() => { status.style.display = "none"; }, 1500);
                         } catch (error) {
                             console.error(error);
                             setStatus("Could not prepare the game files.\n\n" + error.message, true);
