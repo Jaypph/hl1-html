@@ -73,7 +73,10 @@
             acceptCookiePolicy();
             bootAfterPolicy();
         });
-        if (hasCookie("hl1_cookie_policy")) cookiePolicy.style.display = "none";
+        if (hasCookie("hl1_cookie_policy")) {
+            cookiePolicy.style.display = "none";
+            bootAfterPolicy();
+        }
 
         // Cookies are intentionally only used for the policy preference.
         // Large game archives belong in Cache Storage; browsers cannot reliably
