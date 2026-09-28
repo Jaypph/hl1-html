@@ -182,7 +182,7 @@
                 let gameFilesReady = false;
                 let engineReady = false;
 
-                gamePromise.then(() => { gameFilesReady = true; if (engineReady) startGame(); });
+                gamePromise.then(() => { gameFilesReady = true; if (engineReady) startGame(engineModule); });
                 let started = false;
 
                 async function startGame(module) {
@@ -245,6 +245,7 @@
                         }
                     },
                     onRuntimeInitialized: function () {
+                        engineModule = this;
                         engineReady = true;
                         progress(60, "Xash3D engine ready — loading game files…");
                         startGame(this);
