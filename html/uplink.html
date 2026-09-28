@@ -65,8 +65,15 @@
             document.cookie = "hl1_cookie_policy=accepted; Max-Age=31536000; Path=/; SameSite=Lax";
             cookiePolicy.style.display = "none";
         }
+        function bootAfterPolicy() {
+            if (cookiePolicy.style.display !== "none") return;
+            main();
+        }
+        acceptCookies.addEventListener("click", () => {
+            acceptCookiePolicy();
+            bootAfterPolicy();
+        });
         if (hasCookie("hl1_cookie_policy")) cookiePolicy.style.display = "none";
-        else acceptCookies.addEventListener("click", acceptCookiePolicy);
 
         // Cookies are intentionally only used for the policy preference.
         // Large game archives belong in Cache Storage; browsers cannot reliably
