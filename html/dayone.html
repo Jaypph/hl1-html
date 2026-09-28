@@ -181,6 +181,8 @@
 
                 let gameFilesReady = false;
                 let engineReady = false;
+
+                gamePromise.then(() => { gameFilesReady = true; if (engineReady) startGame(); });
                 let started = false;
 
                 async function startGame(module) {
@@ -191,7 +193,6 @@
 
                     // The engine callback runs after its WASM dependencies are ready.
                     // Game files must already be mounted before entering the main loop.
-                    await gamePromise;
                     const zipBuffer = await gamePromise;
                     const extrasBuffer = await extrasPromise;
 
@@ -208,9 +209,7 @@
                     clearTimeout(timeout);
                     status.style.display = "none";
 
-                    console.log("Starting Xash3D with " + fileCount + " game files.");
-                    await new Promise(requestAnimationFrame);
-                    module.callMain();
+                    console.log("Xash3D started with " + fileCount + " game files.");
                 }
 
                 progress(5, "Starting Xash3D engine…");
