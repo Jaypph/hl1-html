@@ -38,9 +38,9 @@
     </div>
     <canvas id="canvas"></canvas>
 
+    <script src="https://cdn.jsdelivr.net/npm/xash3d-fwgs@1.2.2/dist/raw.js"></script>
     <script type="module">
         import JSZip from "https://esm.sh/jszip@3.10.1";
-        import { Xash3D } from "https://esm.sh/xash3d-fwgs@1.2.2";
 
         const status = document.getElementById("status");
         const message = document.getElementById("message");
@@ -169,67 +169,88 @@
         async function main() {
             const timeout = setTimeout(() => {
                 if (status.style.display !== "none") {
-                    message.textContent += "\n\nStill loading after 20 seconds. The connection or device may be too slow for the 20s target.";
+                    message.textContent += "\n\nStill loading after 20 seconds. Check the network connection or browser console.";
                 }
             }, 20000);
 
             try {
-                progress(0, "Downloading game data and starting engine…");
-
-                const xash = new Xash3D({
-                    canvas,
-                    arguments: ["-developer", "1", "-console", "-windowed", "-ref", "webgl2"],
-                    libraries: {
-                        client: HLSDK_BASE + "cl_dll/client_emscripten_wasm32.wasm",
-                        server: HLSDK_BASE + "dlls/hl_emscripten_wasm32.so"
-                    },
-                    filesMap: {
-                        "xash.wasm": ENGINE_BASE + "xash.wasm",
-                        "filesystem_stdio.wasm": ENGINE_BASE + "filesystem_stdio.wasm",
-                        "libref_webgl2.wasm": ENGINE_BASE + "libref_webgl2.wasm",
-                        "cl_dlls/menu_emscripten_wasm32.wasm":
-                            ENGINE_BASE + "cl_dll/menu_emscripten_wasm32.wasm"
-                    }
-                });
+                progress(0, "Preparing game data…");
 
                 const gamePromise = cachedFetch(GAME_URL, "Game data", 55, 0);
                 const extrasPromise = cachedFetch(EXTRAS_URL, "Xash3D extras", 5, 55);
 
-                progress(60, "Loading Xash3D engine…");
-                const enginePromise = xash.init().then(() => {
-                    engineReady = true;
+                let gameFilesReady = false;
+                let engineReady = false;
+                let started = false;
+
+                async function startGame(module) {
+                    if (started || !engineReady || !gameFilesReady) return;
+                    started = true;
+
+                    progress(99, "Starting Half-Life: Uplink…");
+
+                    // The engine callback runs after its WASM dependencies are ready.
+                    // Game files must already be mounted before entering the main loop.
+                    await gamePromise;
+                    const zipBuffer = await gamePromise;
+                    const extrasBuffer = await extrasPromise;
+
+                    const fs = module.FS;
+                    fs.mkdirTree("/rodir");
+                    fs.mkdirTree("/rodir/valve");
+                    fs.mkdirTree("/rwdir");
+
+                    const fileCount = await mountZip(fs, zipBuffer);
+                    fs.writeFile("/rodir/valve/extras.pk3", new Uint8Array(extrasBuffer));
+                    fs.chdir("/rodir");
+
+                    progress(100, "Half-Life: Uplink is ready!");
+                    clearTimeout(timeout);
+                    status.style.display = "none";
+
+                    console.log("Starting Xash3D with " + fileCount + " game files.");
+                    await new Promise(requestAnimationFrame);
+                    module.callMain();
+                }
+
+                progress(5, "Starting Xash3D engine…");
+
+                Xash3D({
+                    arguments: ["-developer", "1", "-console", "-windowed", "-ref", "webgl2"],
+                    canvas,
+                    dynamicLibraries: [
+                        "filesystem_stdio.wasm",
+                        "libref_webgl2.wasm",
+                        "cl_dlls/menu_emscripten_wasm32.wasm",
+                        "cl_dlls/client_emscripten_wasm32.wasm",
+                        "dlls/hl_emscripten_wasm32.so",
+                        "/rwdir/filesystem_stdio.so"
+                    ],
+                    locateFile: (file) => {
+                        switch (file) {
+                            case "xash.wasm":
+                                return ENGINE_BASE + "xash.wasm";
+                            case "filesystem_stdio.wasm":
+                            case "/rwdir/filesystem_stdio.so":
+                                return ENGINE_BASE + "filesystem_stdio.wasm";
+                            case "libref_webgl2.wasm":
+                                return ENGINE_BASE + "libref_webgl2.wasm";
+                            case "cl_dlls/menu_emscripten_wasm32.wasm":
+                                return ENGINE_BASE + "cl_dll/menu_emscripten_wasm32.wasm";
+                            case "cl_dlls/client_emscripten_wasm32.wasm":
+                                return HLSDK_BASE + "cl_dll/client_emscripten_wasm32.wasm";
+                            case "dlls/hl_emscripten_wasm32.so":
+                                return HLSDK_BASE + "dlls/hl_emscripten_wasm32.so";
+                            default:
+                                return file;
+                        }
+                    },
+                    onRuntimeInitialized: function () {
+                        engineReady = true;
+                        progress(60, "Xash3D engine ready — loading game files…");
+                        startGame(this);
+                    }
                 });
-
-                const [zipBuffer, extrasBuffer] = await Promise.all([
-                    gamePromise,
-                    extrasPromise
-                ]);
-                progress(60, engineReady ? "Preparing game files…" : "Game data ready — waiting for Xash3D…");
-                await enginePromise;
-                progress(90, "Xash3D ready — extracting game files…");
-
-                const fs = xash.em.FS;
-                fs.mkdirTree("/rodir");
-                fs.mkdirTree("/rodir/valve");
-                fs.mkdirTree("/rwdir");
-
-                const fileCount = await mountZip(fs, zipBuffer);
-                fs.writeFile("/rodir/valve/extras.pk3", new Uint8Array(extrasBuffer));
-                fs.chdir("/rodir");
-
-                progress(99, "Starting Half-Life…");
-                await new Promise(requestAnimationFrame);
-
-                // xash.main() starts the engine loop and normally does not return
-                // until the game exits. Hide the launcher BEFORE calling it.
-                progress(100, "Half-Life is ready!");
-                clearTimeout(timeout);
-                status.style.display = "none";
-
-                const elapsed = ((performance.now() - startedAt) / 1000).toFixed(1);
-                console.log("Starting Xash3D with " + fileCount + " game files in " + elapsed + "s.");
-                await new Promise(requestAnimationFrame);
-                xash.main();
             } catch (error) {
                 clearTimeout(timeout);
                 console.error(error);
@@ -237,7 +258,7 @@
             }
         }
 
-        main();
+
     </script>
 </body>
 </html>
